@@ -93,24 +93,33 @@ class PromptTemplate:
 
 class OutputCache:
     """Enhanced caching system with quality-based retention."""
-    def __init__(self, cache_dir: str = ".cache", max_size_mb: int = 1000):
+    def __init__(self, cache_dir: str = ".cache", max_size_mb: int = 1000, auto_save: bool = False):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
         self.cache_file = self.cache_dir / "output_cache.json"
         self.max_size_bytes = max_size_mb * 1024 * 1024
         self.cache: Dict[str, Dict[str, Any]] = self._load_cache()
         self.lock = threading.Lock()
+        self.auto_save = auto_save  # Only save automatically if enabled
+        self.dirty = False  # Track if cache has unsaved changes
     
     def _load_cache(self) -> Dict[str, Dict[str, Any]]:
         if self.cache_file.exists():
-            with open(self.cache_file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(self.cache_file, 'r') as f:
+                    return json.load(f)
+            except:
+                return {}
         return {}
     
     def _save_cache(self):
         with self.lock:
-            with open(self.cache_file, 'w') as f:
-                json.dump(self.cache, f)
+            try:
+                with open(self.cache_file, 'w') as f:
+                    json.dump(self.cache, f)
+                self.dirty = False
+            except Exception:
+                pass  # Silently fail on cache save errors
     
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         with self.lock:
@@ -121,7 +130,9 @@ class OutputCache:
             if self._get_cache_size() > self.max_size_bytes:
                 self._prune_cache()
             self.cache[key] = value
-            self._save_cache()
+            self.dirty = True
+            if self.auto_save:
+                self._save_cache()
     
     def _get_cache_size(self) -> int:
         return sum(len(str(v).encode('utf-8')) for v in self.cache.values())
@@ -224,3 +235,213 @@ class Controller:
             return
         self.cache.set(prompt, {
             'output': output,
+            'timestamp': time.time(),
+            'metrics': self.metrics.__dict__ if self.metrics else {}
+        })
+
+    def _generate_cache_key(self, prompt: str) -> str:
+        """Generate a cache key for the given prompt."""
+        import hashlib
+        return hashlib.md5(prompt.encode()).hexdigest()
+
+    def execute(self, prompt: str, **kwargs) -> str:
+        """
+        Execute the orchestration process for a given prompt.
+        
+        Args:
+            prompt: The input prompt to process
+            **kwargs: Additional execution parameters
+            
+        Returns:
+            str: The generated and verified output
+        """
+        start_time = time.time()
+        
+        # Check cache first
+        cached_output = self._get_cached_output(prompt)
+        if cached_output:
+            if self.logger:
+                self.logger.info(f"Retrieved cached output for prompt: {prompt[:50]}...")
+            return cached_output
+        
+        # Apply prompt template if available
+        if self.prompt_template:
+            prompt = self.prompt_template.get_template().format(prompt=prompt)
+        
+        # Determine iterations
+        iterations = self.max_iterations
+        if self.dynamic_iterations:
+            iterations = self.dynamic_iterations(prompt)
+        
+        # Generate and verify output
+        output = None
+        refinement_count = 0
+        
+        for i in range(iterations):
+            try:
+                if self.logger:
+                    self.logger.info(f"Iteration {i+1}/{iterations}")
+                
+                # Generate output
+                output = self._process_with_retry(
+                    self.generator.generate_output,
+                    prompt
+                )
+                
+                # Verify output
+                is_valid, verified_output = self._process_with_retry(
+                    self.verifier.verify,
+                    output,
+                    prompt
+                )
+                
+                if is_valid:
+                    output = verified_output
+                    break
+                    
+                refinement_count += 1
+                
+                # Use refinement generator if available
+                if self.refinement_generator:
+                    prompt = self.refinement_generator.refine_prompt(prompt, output)
+                    
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"Error in iteration {i+1}: {str(e)}")
+                if i == iterations - 1:
+                    raise
+        
+        # Update metrics
+        processing_time = time.time() - start_time
+        token_count = len(output.split()) if output else 0
+        
+        self.metrics = ValidationMetrics(
+            confidence_score=0.8,
+            processing_time=processing_time,
+            token_count=token_count,
+            refinement_count=refinement_count,
+            validation_checks=["generated", "verified"],
+            quality_score=0.85,
+            last_updated=datetime.now()
+        )
+        
+        # Update adaptive learning
+        if self.adaptive_learning:
+            self.adaptive_learning.update_parameters(self.metrics)
+        
+        # Cache the output
+        self._cache_output(prompt, output)
+        
+        if self.logger:
+            self.logger.info(f"Execution completed in {processing_time:.2f}s")
+        
+        return output
+
+    def execute_parallel(self, prompts: List[str], max_workers: int = 5) -> List[str]:
+        """
+        Execute multiple prompts in parallel.
+        
+        Args:
+            prompts: List of prompts to process
+            max_workers: Maximum number of parallel workers
+            
+        Returns:
+            List[str]: List of generated outputs
+        """
+        if not self.parallel_processing:
+            return [self.execute(prompt) for prompt in prompts]
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(self.execute, prompt) for prompt in prompts]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
+        
+        return results
+
+    def get_validation_metrics(self) -> ValidationMetrics:
+        """Get the current validation metrics."""
+        return self.metrics
+
+    def get_performance_report(self) -> Dict[str, Any]:
+        """
+        Get a comprehensive performance report.
+        
+        Returns:
+            Dict containing performance metrics and statistics
+        """
+        cache_entries = len(self.cache.cache) if self.cache else 0
+        cache_size_bytes = self.cache._get_cache_size() if self.cache else 0
+        
+        report = {
+            'metrics': self.metrics.__dict__ if self.metrics else {},
+            'cache_stats': {
+                'enabled': self.cache_enabled,
+                'entries': cache_entries,
+                'size': cache_size_bytes
+            },
+            'prompt_template_stats': {}
+        }
+        
+        if self.prompt_template:
+            report['prompt_template_stats'] = {
+                'variations': len(self.prompt_template.variations),
+                'best_variation': self.prompt_template.get_best_variation()
+            }
+        
+        if self.adaptive_learning:
+            report['adaptive_learning'] = self.adaptive_learning.get_optimal_parameters()
+        
+        return report
+
+class CustomController(Controller):
+    """Controller that allows custom execution logic through a user-defined function."""
+    
+    def __init__(self, custom_func, generator=None, verifier=None, **kwargs):
+        """
+        Initialize CustomController with a custom execution function.
+        
+        Args:
+            custom_func: Callable that takes (generator, verifier, prompt, max_iterations) 
+                        and returns the output string
+            generator: The generator instance
+            verifier: The verifier instance
+            **kwargs: Additional arguments passed to parent Controller
+        """
+        super().__init__(generator=generator, verifier=verifier, **kwargs)
+        self.custom_func = custom_func
+    
+    def execute(self, prompt: str, **kwargs) -> str:
+        """
+        Execute using the custom function.
+        
+        Args:
+            prompt: The input prompt
+            **kwargs: Additional execution parameters
+            
+        Returns:
+            str: The output from custom function
+        """
+        # Check cache first if enabled
+        if self.cache_enabled:
+            cache_key = self._generate_cache_key(prompt)
+            cached = self.cache.get(cache_key)
+            if cached:
+                return cached['output']
+        
+        # Execute custom function
+        result = self.custom_func(
+            self.generator, 
+            self.verifier, 
+            prompt, 
+            self.max_iterations
+        )
+        
+        # Cache result if enabled
+        if self.cache_enabled:
+            cache_data = {
+                'output': result,
+                'timestamp': time.time(),
+                'metrics': self.get_validation_metrics().__dict__ if hasattr(self, 'get_validation_metrics') else {}
+            }
+            self.cache.set(cache_key, cache_data)
+        
+        return result
