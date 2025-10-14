@@ -21,33 +21,28 @@ class Verifier:
             # Delegate to custom verifier if provided
             if self.custom_verifier:
                 try:
-                    valid, score = self.custom_verifier(text, prompt)
+                    valid, result = self.custom_verifier(text, prompt)
                 except TypeError:
-                    valid, score = self.custom_verifier(text)
+                    valid, result = self.custom_verifier(text)
                 elapsed = time.time() - start_time
-                self.logger.debug(f"Custom verification completed in {elapsed:.2f}s, valid={valid}, score={score}")
-                # Ensure score is numeric
-                try:
-                    score = float(score)
-                except Exception:
-                    score = 0.0
-                message = json.dumps({"score": score})
-                return valid, message
+                self.logger.debug(f"Custom verification completed in {elapsed:.2f}s, valid={valid}")
+                # Custom verifier should return (bool, original_text)
+                return valid, result
 
-            # Basic validation: non-empty text passes with perfect score
+            # Basic validation: non-empty text passes
             if not text or not text.strip():
                 self.logger.warning("Verification failed: Empty output")
-                return False, json.dumps({"score": 0.0})
+                return False, "Empty output"
 
-            # Any non-empty text passes with score 1.0
+            # Any non-empty text passes
             elapsed = time.time() - start_time
             self.logger.debug(f"Basic verification completed in {elapsed:.2f}s")
-            return True, json.dumps({"score": 1.0})
+            return True, text
 
         except Exception as e:
             self.logger.error(f"Error during verification: {str(e)}")
-            # On exception, treat as failure with zero score
-            return False, json.dumps({"score": 0.0})
+            # On exception, treat as failure
+            return False, f"Verification error: {str(e)}"
 
 class CustomVerifier:
     """
@@ -65,21 +60,16 @@ class CustomVerifier:
             self.logger.debug(f"Starting custom verification, text length: {len(text)}")
 
             try:
-                valid, score = self.custom_func(text, prompt)
+                valid, result = self.custom_func(text, prompt)
             except TypeError:
-                valid, score = self.custom_func(text)
+                valid, result = self.custom_func(text)
 
             elapsed = time.time() - start_time
-            self.logger.debug(f"Custom verification completed in {elapsed:.2f}s, valid={valid}, score={score}")
+            self.logger.debug(f"Custom verification completed in {elapsed:.2f}s, valid={valid}")
 
-            # Ensure score is numeric
-            try:
-                score = float(score)
-            except Exception:
-                score = 0.0
-            message = json.dumps({"score": score})
-            return valid, message
+            # Return the result as-is (should be the original text or modified text)
+            return valid, result
 
         except Exception as e:
             self.logger.error(f"Error in custom verification: {str(e)}")
-            return False, json.dumps({"score": 0.0})
+            return False, f"Verification error: {str(e)}"

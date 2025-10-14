@@ -256,17 +256,36 @@ class Controller:
             str: The generated and verified output
         """
         start_time = time.time()
+        original_prompt = prompt  # Keep original for cache/tracking
         
         # Check cache first
-        cached_output = self._get_cached_output(prompt)
+        cached_output = self._get_cached_output(original_prompt)
         if cached_output:
             if self.logger:
                 self.logger.info(f"Retrieved cached output for prompt: {prompt[:50]}...")
             return cached_output
         
-        # Apply prompt template if available
+        # Select template variation if available
+        selected_variation = None
         if self.prompt_template:
-            prompt = self.prompt_template.get_template().format(prompt=prompt)
+            # Use best performing variation if we have performance history
+            best_variation = self.prompt_template.get_best_variation()
+            
+            # If no best variation yet, cycle through variations to gather data
+            if best_variation is None and self.prompt_template.variations:
+                # Use round-robin to try each variation
+                variation_names = list(self.prompt_template.variations.keys())
+                # Simple selection: use variation based on cache size
+                variation_idx = len(self.cache.cache) % len(variation_names) if self.cache else 0
+                selected_variation = variation_names[variation_idx]
+            else:
+                selected_variation = best_variation
+            
+            # Apply the selected template
+            if selected_variation:
+                prompt = self.prompt_template.get_template(selected_variation).format(prompt=prompt)
+            else:
+                prompt = self.prompt_template.get_template().format(prompt=prompt)
         
         # Determine iterations
         iterations = self.max_iterations
@@ -315,22 +334,32 @@ class Controller:
         processing_time = time.time() - start_time
         token_count = len(output.split()) if output else 0
         
+        # Calculate quality score based on multiple factors
+        quality_score = 0.85  # Base score
+        if refinement_count == 0:
+            quality_score += 0.10  # Bonus for first-time success
+        quality_score = min(0.99, quality_score - (refinement_count * 0.05))  # Penalty for refinements
+        
         self.metrics = ValidationMetrics(
             confidence_score=0.8,
             processing_time=processing_time,
             token_count=token_count,
             refinement_count=refinement_count,
             validation_checks=["generated", "verified"],
-            quality_score=0.85,
+            quality_score=quality_score,
             last_updated=datetime.now()
         )
+        
+        # Record template performance if we used a variation
+        if self.prompt_template and selected_variation:
+            self.prompt_template.record_performance(selected_variation, quality_score)
         
         # Update adaptive learning
         if self.adaptive_learning:
             self.adaptive_learning.update_parameters(self.metrics)
         
-        # Cache the output
-        self._cache_output(prompt, output)
+        # Cache the output (use original prompt as key)
+        self._cache_output(original_prompt, output)
         
         if self.logger:
             self.logger.info(f"Execution completed in {processing_time:.2f}s")
@@ -420,11 +449,19 @@ class CustomController(Controller):
         Returns:
             str: The output from custom function
         """
+        start_time = time.time()
+        
         # Check cache first if enabled
         if self.cache_enabled:
             cache_key = self._generate_cache_key(prompt)
             cached = self.cache.get(cache_key)
             if cached:
+                # Restore cached metrics if available
+                if 'metrics' in cached and cached['metrics']:
+                    try:
+                        self.metrics = ValidationMetrics(**cached['metrics'])
+                    except:
+                        pass
                 return cached['output']
         
         # Execute custom function
@@ -435,12 +472,41 @@ class CustomController(Controller):
             self.max_iterations
         )
         
+        # Update metrics after execution
+        processing_time = time.time() - start_time
+        token_count = len(result.split()) if result else 0
+        
+        # Calculate quality score based on result characteristics
+        quality_score = 0.80  # Base score for custom execution
+        if "[WARNING" in result or "[ERROR" in result:
+            quality_score = 0.50  # Lower score for warnings/errors
+        elif "Quality Score:" in result:
+            # Try to extract quality score from result if present
+            try:
+                import re
+                match = re.search(r'Quality Score: ([\d.]+)', result)
+                if match:
+                    extracted_score = float(match.group(1))
+                    quality_score = extracted_score
+            except:
+                pass
+        
+        self.metrics = ValidationMetrics(
+            confidence_score=quality_score,
+            processing_time=processing_time,
+            token_count=token_count,
+            refinement_count=0,
+            validation_checks=["custom_execution"],
+            quality_score=quality_score,
+            last_updated=datetime.now()
+        )
+        
         # Cache result if enabled
         if self.cache_enabled:
             cache_data = {
                 'output': result,
                 'timestamp': time.time(),
-                'metrics': self.get_validation_metrics().__dict__ if hasattr(self, 'get_validation_metrics') else {}
+                'metrics': self.metrics.__dict__
             }
             self.cache.set(cache_key, cache_data)
         
