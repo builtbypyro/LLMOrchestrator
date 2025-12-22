@@ -36,7 +36,7 @@ LLMOrchestrator enables structured orchestration of multiple models, allowing di
 
 # Core LLM Orchestration components
 
-<!--The framework's architecture is centered around several key components that researchers interact with to build their experiments.-->
+The framework's architecture is centered around several key components that researchers interact with to build their experiments.
 
 ## Controller
 The central class in LLMOrchestrator is the `Controller`. To set up an experiment, the user instantiates a `Controller` object, providing it with generator and verifier components, and configuring parameters that govern the orchestration process, such as the maximum number of iterations (`max_iterations`) and verification attempts (`max_verifications`) per iteration.
