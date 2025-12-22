@@ -25,14 +25,17 @@ license: MIT
 
 # Summary
 
-LLMOrchestrator is a Python package for studying Large Language Model (LLM) behavior, capabilities, and limitations, enabling researchers to explore diverse perspectives, validate outputs, and analyze model interactions. It orchestrates multiple LLMs in roles like generation, verification, and refinement, supporting iterative reasoning (e.g., chain-of-thought [@wei2022chain]). By integrating API-based (OpenAI [@openai_api]) and local models (Hugging Face Transformers [@wolf2019huggingface]), it enables systematic output comparison, helping uncover biases and emergent behaviors. Its framework abstracts complex workflows, offering tools for prompt management, structured experimentation, and performance monitoring for reproducibility. For AI safety, multi-agent simulations, or reliability benchmarking, LLMOrchestrator empowers researchers to investigate LLM complexities through controlled experimentation.
+LLMOrchestrator provides a python package for studying the behavior, capabilities, and limitations of Large Language Models (LLMs), enabling researchers to 
+<!--explore diverse perspectives, validate outputs, and-->
+analyze how different models interact. It facilitates the orchestration of multiple LLMs, allowing them to take on distinct roles such as generation, verification, and refinement, while supporting iterative reasoning processes like chain-of-thought [@wei2022chain]. By integrating API-based and local models (e.g., OpenAI [@openai_api], Hugging Face Transformers [@wolf2019huggingface]), LLMOrchestrator enables systematic comparison of model outputs, helping to uncover biases and emergent behaviors. Its framework abstracts complex workflows, providing tools for prompt management, structured experimentation, and performance monitoring to ensure insightful analysis. <!--Whether used for AI safety, multi-agent simulations, or benchmarking model reliability, -->LLMOrchestrator enables researchers to investigate the complexities of language models through controlled <!--and transparent -->experimentation.
 
 # Statement of Need
-Research on Large Language Models (LLMs) involves more than simple prompt-response; it requires exploring diverse perspectives, validating outputs, and understanding nuanced model reasoning. This demands managing multi-step processes, iterative self-correction, and orchestrating multiple models. **LLMOrchestrator** addresses these needs by providing a controlled, flexible environment for custom workflows, rigorous validation, and comparing diverse output patterns. This framework helps researchers efficiently navigate complex LLM experiments, ensuring varied insights and rigorous checks are integral to their research process.
+<!--Research on Large Language Models (LLMs) involves more than simple prompt-response interactions, it requires exploring diverse perspectives, validating varied outputs, and understanding the nuanced reasoning behind model behaviors. Achieving this demands careful management of multi-step processes, iterative self-correction, and the orchestration of multiple models to capture the full spectrum of responses. LLMOrchestrator addresses these needs by providing a controlled, flexible environment that supports custom workflows, rigorous validation, and the comparison of diverse output patterns. This framework helps researchers efficiently navigate the complexity of LLM experiments, ensuring that varied insights and rigorous checks are integral to the research process.-->
+
+Research on LLMs requires a structured approach to handle the complexity of interactions and iterative reasoning. Achieving this requires careful management of multi-step processes, iterative self-correction, and the orchestration of multiple models to capture the full spectrum of responses. LLMOrchestrator addresses these needs by providing a controlled environment that supports custom workflows for various experimental needs. The framework helps researchers efficiently navigate the complexity of LLM experiments.
 
 # Core capabilities
-
-LLMOrchestrator offers a flexible and powerful framework for designing, executing, and analyzing complex interactions between Large Language Models. It enables structured orchestration of multiple models, allowing different LLMs (e.g., `OpenAIModel`, `LocalModel`) to perform roles such as generation, critique, and validation. Researchers can implement iterative refinement loops to study reasoning processes like chain-of-thought and self-correction, and integrate API-based with locally hosted models for diverse comparative studies. The framework supports custom logic through Python functions for tailored generation strategies and domain-specific validation. Prompt templating (`PromptTemplate`) facilitates systematic experimentation, while parallel execution (`execute_parallel`) and caching (`OutputCache`) improve efficiency. Additionally, LLMOrchestrator provides built-in monitoring (`ValidationMetrics`) to track key performance indicators like processing times and verification outcomes, ensuring rigorous evaluation of LLM outputs. Its modular design allows customizing workflows for various experimental needs, from multi-step reasoning to adaptive model interactions.
+LLMOrchestrator enables structured orchestration of multiple models, allowing different LLMs (e.g., `OpenAIModel`, `LocalModel`) to perform roles such as generation, critique, and validation. Researchers can implement iterative refinement loops to study reasoning processes like chain-of-thought and self-correction, while <!--seamlessly -->integrating API-based and locally hosted models for <!--diverse -->comparative studies. The framework supports custom logic through Python functions, allowing tailored generation and validation strategies<!--and domain-specific validation methods-->. Prompt templating (`PromptTemplate`) facilitates systematic experimentation with prompt variations. <!--, while-->Performance optimization features like parallel execution (`execute_parallel`) and caching (`OutputCache`) improve efficiency. Additionally, LLMOrchestrator provides built-in monitoring (`ValidationMetrics`) to track <!--key-->performance indicators such as processing times, verification outcomes, and quality scores, ensuring rigorous <!--and reproducible-->evaluation of LLM outputs<!--across diverse perspectives-->. Its modular design allows researchers to customize workflows for a wide range of experimental needs. <!--, from multi-step reasoning studies to adaptive model interactions.-->
 
 # Core LLM Orchestration components
 
@@ -57,9 +60,9 @@ controller = Controller(
 ```
 
 ## Models (`BaseModel`, `OpenAIModel`, `LocalModel`)
-These classes represent LLMs in the orchestration, abstracting underlying API calls or local inference. Researchers can use different model instances for various roles (e.g., `OpenAIModel` for generation, a `LocalModel` for verification).
+These classes represent LLMs in the orchestration, abstracting underlying API calls or local inference. Researchers can use different model instances for various roles<!-- (e.g., one `OpenAIModel` for generation, a `LocalModel` for verification)-->.
 
-*   `OpenAIModel`: Interfaces with the OpenAI API. Requires an API key (typically via environment variable).
+*   `OpenAIModel`: Interfaces with the OpenAI API. Requires an API key<!--(typically via environment variable)-->.
 *   `LocalModel`: Uses Hugging Face `transformers` for local inference. Requires appropriate libraries (`transformers`, `torch`, `accelerate`) and model weights. Supports CPU/GPU.
 
 ```python
@@ -73,7 +76,7 @@ verifier_model = LocalModel(model_name="google/flan-t5-base", device="cuda")
 ```
 
 ## Generator and Verifier
-These components define actions within the orchestration loop. They can be `BaseModel` instances or custom wrappers (`CustomGenerator`, `CustomVerifier`) around Python functions. The `Verifier` is crucial for research, implementing criteria (simple checks, rubrics, or LLM calls) to evaluate output and guide refinement. Verification results, with quality scores, are captured in metrics.
+These components define actions within the orchestration loop. They can be `BaseModel` instances or custom wrappers (`CustomGenerator`, `CustomVerifier`) around Python functions. The `Verifier` is crucial for research, implementing criteria <!--(which can be simple checks, complex rubrics, or even another LLM call)-->(simple checks, rubrics, or even LLM calls) to evaluate output and guide refinement. Verification results, including quality scores, are captured in the metrics.
 
 ```python
 from LLMOrchestrator.verifier import Verifier
@@ -92,14 +95,14 @@ keyword_verifier = Verifier(custom_verifier=keyword_check)
 ```
 
 ## Iteration and Refinement Loop
-The `Controller.execute()` method manages the core loop. For a prompt, it calls the generator, then passes output to the verifier. Based on verification outcome and configured `max_iterations`/`max_verifications`, it may stop, retry verification, or proceed to the next iteration, potentially refining prompts/outputs via internal or custom logic. This controlled iteration allows systematic study of multi-step reasoning.
+The `Controller.execute()` method manages the core loop. For a prompt, it calls the generator, then passes output to the verifier. Based on verification outcome and configured `max_iterations`/`max_verifications`, it may stop, retry verification, or proceed to the next iteration (potentially refining the prompt or output based on internal logic<!--or custom implementations-->). This controlled iteration allows systematic study of multi-step reasoning.
 
 # Experimentation and analysis
 
 LLMOrchestrator provides features specifically aimed at supporting the research analysis phase.
 
 ## Metrics Collection
-When `monitoring_enabled=True`, the `Controller` automatically collects `ValidationMetrics` per execution. These metrics include processing time, approximated token counts, verification outcomes, quality scores from verifier feedback, and potential indicators via `AdaptiveLearning`. This data can be retrieved programmatically using `controller.get_validation_metrics()` or `controller.get_performance_report()` for analysis.
+When `monitoring_enabled=True`, the `Controller` automatically collects `ValidationMetrics` per execution. These metrics include processing time, approximated token counts, verification outcomes, quality scores from verifier feedback, and potential indicators via `AdaptiveLearning`. This data can be retrieved programmatically using `controller.get_validation_metrics()` or `controller.get_performance_report()` for analysis.<!-- across <!--different experimental-> conditions.-->
 
 ## Parallel Processing for Experiments
 Running experiments often requires multiple trials or testing across various parameter settings. The `Controller.execute_parallel()` method leverages Python's `concurrent.futures` to process a list of prompts concurrently, significantly reducing the time needed to gather data for analysis, especially when interacting with slower local models or rate-limited APIs.
@@ -120,7 +123,7 @@ While potentially disabled for final experimental runs, `OutputCache` is valuabl
 
 # Conclusions
 
-**LLMOrchestrator** bridges the gap between LLM capabilities and structured research requirements, enabling deeper exploration of diverse perspectives, validation methods, and LLM output variability. By providing a modular framework for orchestrating multiple models, facilitating iterative reasoning, and systematically collecting performance data, it empowers researchers to study how models generate, refine, and critique information, while helping to reduce bias in reasoning. Its design supports reproducibility and comparative analysis, making it easier to investigate emergent behaviors and interaction patterns. For multi-agent simulations, AI safety studies, or improving AI system reliability, **LLMOrchestrator** offers a controlled environment for probing language model complexities and ensuring more robust, well-validated insights.
+LLMOrchestrator bridges the gap between raw LLM capabilities and structured research requirements. It enables deeper exploration of <!--diverse perspectives, validation methods, and the variability of-->various attributes of LLM outputs. By providing a modular framework for orchestrating multiple models, facilitating iterative reasoning, and collecting performance data, it enables researchers to study how models <!--generate, refine, and critique-->understand information while reducing the impact of bias in reasoning<!--one segment of the reasoning progress-->. Its design supports reproducibility and comparative analysis, making it easier to investigate <!--emergent-->behaviors <!--, reasoning diversity, and interaction patterns-->across models. <!--Whether used for multi-agent simulations, AI safety studies, or improving reliability in AI systems,--> LLMOrchestrator offers a controlled environment for understanding the complexities of language models and ensuring more robust insights.
 
 # Acknowledgements
 
