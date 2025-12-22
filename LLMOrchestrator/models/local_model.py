@@ -31,7 +31,7 @@ class LocalModel(BaseModel):
             top_p: Top-p sampling parameter
             do_sample: Whether to use sampling
         """
-        super().__init__()
+        super().__init__(model_name)  # Add missing parameter
         self.model_name = model_name
         self.device = device
         self.max_length = max_length

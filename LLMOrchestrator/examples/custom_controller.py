@@ -94,7 +94,10 @@ def main():
     print(f"\nCaching Results:")
     print(f"First execution time: {time1:.2f} seconds")
     print(f"Second execution time: {time2:.2f} seconds")
-    print(f"Cache speedup: {time1/time2:.2f}x")
+    if time2 > 0:
+        print(f"Cache speedup: {time1/time2:.2f}x")
+    else:
+        print(f"Cache speedup: Instant (cached result returned)")
     
     # Get performance report
     report = controller.get_performance_report()
